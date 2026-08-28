@@ -1,0 +1,11 @@
+docker compose down -v
+
+docker compose up -d
+
+docker exec -it immo_postgres psql -U immo_user -d immobilien -c "\dt"
+
+docker exec -it immo_postgres psql -U admin -d immobilien
+
+
+# Import Workdlows
+docker exec -it n8n n8n import:workflow --separate --input=/workflows

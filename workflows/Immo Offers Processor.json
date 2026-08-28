@@ -1,0 +1,1024 @@
+{
+  "name": "Immo Offers Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        0
+      ],
+      "id": "44eee7af-809d-407c-aad5-17ad723f4340",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $input.first().json.data; // or however ScrapingBee returns it\n\n// Remove scripts, styles, comments\nlet cleaned = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<!--[\\s\\S]*?-->/g, '')\n  .replace(/<[^>]+>/g, ' ')          // strip all HTML tags\n  .replace(/\\s+/g, ' ')              // collapse whitespace\n  .trim()\n  .slice(0, 12000);                  // keep first 12k chars (fits Claude easily)\n\nreturn [{ json: { text: cleaned } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        0
+      ],
+      "id": "263052b9-63aa-49ba-8aa0-2fda969572eb",
+      "name": "HTML Trimmer"
+    },
+    {
+      "parameters": {
+        "url": "=https://app.scrapingbee.com/api/v1/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "=https://www.immobilienscout24.de/expose/{{ $json.expose_id }}"
+            },
+            {
+              "name": "api_key",
+              "value": "1IPAVYU3B3FO8DE879B0UQSUIEL4FNJ9GR1DDD6K8I7X4REND55BEA8AS03LRQIOF4SU7YZUH58BRLP2"
+            },
+            {
+              "name": "premium_proxy",
+              "value": "True"
+            },
+            {
+              "name": "render_js",
+              "value": "True"
+            },
+            {
+              "name": "block_resources",
+              "value": "False"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        384,
+        0
+      ],
+      "id": "70b4dd71-d9da-47cb-b5b3-eae9fc4a8e3d",
+      "name": "Get Immo Offer HTML"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "immo_offers",
+          "mode": "list",
+          "cachedResultName": "immo_offers"
+        },
+        "limit": 1,
+        "where": {
+          "values": [
+            {
+              "column": "processed",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        160,
+        0
+      ],
+      "id": "527d566c-d0ea-4537-a9a0-4176aaa2567f",
+      "name": "Gell all unprocessed offers",
+      "credentials": {
+        "postgres": {
+          "id": "Q56zRaiUHFlg1rRy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-sonnet-4-6",
+          "mode": "list",
+          "cachedResultName": "claude-sonnet-4-6"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a real estate data extraction expert. \n\nExtract ALL metadata from the following German real estate listing text that is relevant for cashflow and investment analysis.\n\nReturn ONLY valid JSON with this exact structure (use null for missing fields):\n\n{\n  \"listing\": {\n    \"id\": \"\",\n    \"url\": \"\",\n    \"title\": \"\",\n    \"property_type\": \"\"\n  },\n  \"location\": {\n    \"street\": \"\",\n    \"city\": \"\",\n    \"zip_code\": \"\",\n    \"district\": \"\",\n    \"state\": \"\",\n    \"country\": \"DE\"\n  },\n  \"property\": {\n    \"living_area_m2\": null,\n    \"total_area_m2\": null,\n    \"land_area_m2\": null,\n    \"rooms\": null,\n    \"bedrooms\": null,\n    \"bathrooms\": null,\n    \"floor\": null,\n    \"total_floors\": null,\n    \"year_built\": null,\n    \"last_renovation_year\": null,\n    \"condition\": \"\",\n    \"has_balcony\": null,\n    \"has_terrace\": null,\n    \"has_garden\": null,\n    \"has_cellar\": null,\n    \"has_elevator\": null,\n    \"parking_spots\": null,\n    \"parking_type\": \"\",\n    \"monument_protected\": null\n  },\n  \"financials\": {\n    \"purchase_price_eur\": null,\n    \"price_per_m2_eur\": null,\n    \"monthly_cold_rent_eur\": null,\n    \"monthly_warm_rent_eur\": null,\n    \"monthly_service_charges_eur\": null,\n    \"monthly_hoa_fee_eur\": null,\n    \"annual_gross_rent_eur\": null,\n    \"gross_yield_percent\": null,\n    \"ground_rent_eur\": null,\n    \"is_currently_rented\": null,\n    \"rent_indexed\": null\n  },\n  \"energy\": {\n    \"energy_class\": \"\",\n    \"energy_consumption_kwh_m2\": null,\n    \"heating_type\": \"\",\n    \"energy_certificate_type\": \"\"\n  },\n  \"transaction\": {\n    \"commission_buyer_percent\": null,\n    \"commission_buyer_eur\": null,\n    \"available_from\": \"\",\n    \"listing_date\": \"\"\n  }\n}\n\nListing text:\n{{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        832,
+        0
+      ],
+      "id": "cf4ddb69-140f-458a-9efa-e102cb1cbd62",
+      "name": "Extract Metadata",
+      "credentials": {
+        "anthropicApi": {
+          "id": "09EkmdWYP9KI1qyf",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the text from Anthropic's response structure\nconst raw = $input.first().json.content[0].text;\n\n// Strip markdown code block if present (```json ... ```)\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/```\\s*$/i, '')\n  .trim();\n\n// Parse JSON\nconst parsed = JSON.parse(cleaned);\n\nreturn [{ json: parsed }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "40d61e8c-acce-43ed-98c7-78c9537d0891",
+      "name": "Parse Immo Metadata"
+    },
+    {
+      "parameters": {
+        "chatId": "-1004492890322",
+        "text": "=🏠 <b>Neues Immobilienangebot!</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n📍 <b>Lage</b>\nStadt: {{ $json.location.city }}, {{ $json.location.district }}\nPLZ: {{ $json.location.zip_code }} · {{ $json.location.state }}\n\n🏗️ <b>Objektdetails</b>\nTyp: {{ $json.listing.property_type }}\nWohnfläche: {{ $json.property.living_area_m2 }} m²\nZimmer: {{ $json.property.rooms }} ({{ $json.property.bedrooms }} Schlafzimmer · {{ $json.property.bathrooms }} Bad)\nEtage: {{ $json.property.floor }} von {{ $json.property.total_floors }}\nBaujahr: {{ $json.property.year_built }} · Saniert: {{ $json.property.last_renovation_year }}\nZustand: {{ $json.property.condition }}\n\n✅ <b>Ausstattung</b>\nBalkon: {{ $json.property.has_balcony ? '✅' : '❌' }}\nTerrasse: {{ $json.property.has_terrace ? '✅' : '❌' }}\nGarten: {{ $json.property.has_garden ? '✅' : '❌' }}\nKeller: {{ $json.property.has_cellar ? '✅' : '❌' }}\nAufzug: {{ $json.property.has_elevator ? '✅' : '❌' }}\nStellplatz: {{ $json.property.parking_type ?? 'Kein' }}\n\n💶 <b>Finanzen</b>\nKaufpreis: <b>{{ $json.financials.purchase_price_eur }}€</b>\nPreis/m²: {{ $json.financials.price_per_m2_eur }}€\nKaltmiete: {{ $json.financials.monthly_cold_rent_eur ?? 'k.A.' }}€/mo\nWarmmiete: {{ $json.financials.monthly_warm_rent_eur ?? 'k.A.' }}€/mo\nHausgeld: {{ $json.financials.monthly_hoa_fee_eur }}€/Monat\nBruttorendite: {{ $json.financials.gross_yield_percent ?? 'k.A.' }}%\nVermietet: {{ $json.financials.is_currently_rented ? '✅ Ja' : '❌ Nein' }}\n\n⚡ <b>Energie</b>\nEnergieklasse: {{ $json.energy.energy_class }}\nVerbrauch: {{ $json.energy.energy_consumption_kwh_m2 }} kWh/m²\nHeizung: {{ $json.energy.heating_type }}\nAusweis: {{ $json.energy.energy_certificate_type }}\n\n📋 <b>Transaktion</b>\nProvision: {{ $json.transaction.commission_buyer_percent }}% ({{ $json.transaction.commission_buyer_eur ?? 'k.A.' }}€)\nVerfügbar ab: {{ $json.transaction.available_from }}\n\n🔗 <a href=\"{{ $json.listing.url }}\">Zum Inserat</a>\n━━━━━━━━━━━━━━━━━━━━━",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1472,
+        -256
+      ],
+      "id": "4e19bf5b-d0a1-4789-af0c-5114880664bd",
+      "name": "Send offer via Telegram",
+      "webhookId": "cd14aa00-d70c-4e1a-9514-06e4f03a53cc",
+      "credentials": {
+        "telegramApi": {
+          "id": "Hw8D4pPP2Ej7yGVn",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "immo_offers_details",
+          "mode": "list",
+          "cachedResultName": "immo_offers_details"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "has_balcony": "={{ $json.property.has_balcony }}",
+            "has_terrace": "={{ $json.property.has_terrace }}",
+            "has_garden": "={{ $json.property.has_garden }}",
+            "has_cellar": "={{ $json.property.has_cellar }}",
+            "has_elevator": "={{ $json.property.has_elevator }}",
+            "monument_protected": "={{ $json.property.monument_protected }}",
+            "is_currently_rented": "={{ $json.financials.is_currently_rented }}",
+            "rent_indexed": "={{ $json.financials.rent_indexed }}",
+            "living_area_m2": "={{ $json.property.living_area_m2 }}",
+            "total_area_m2": "={{ $json.property.total_area_m2 }}",
+            "land_area_m2": "={{ $json.property.land_area_m2 }}",
+            "rooms": "={{ $json.property.rooms }}",
+            "bedrooms": "={{ $json.property.bedrooms }}",
+            "bathrooms": "={{ $json.property.bathrooms }}",
+            "floor": "={{ $json.property.floor }}",
+            "total_floors": "={{ $json.property.total_floors }}",
+            "year_built": "={{ $json.property.year_built }}",
+            "last_renovation_year": "={{ $json.property.last_renovation_year }}",
+            "parking_spots": "={{ $json.property.parking_spots }}",
+            "purchase_price_eur": "={{ $json.financials.purchase_price_eur }}",
+            "price_per_m2_eur": "={{ $json.financials.price_per_m2_eur }}",
+            "monthly_cold_rent_eur": "={{ $json.financials.monthly_cold_rent_eur }}",
+            "monthly_service_charges_eur": "={{ $json.financials.monthly_service_charges_eur }}",
+            "monthly_hoa_fee_eur": "={{ $json.financials.monthly_hoa_fee_eur }}",
+            "annual_gross_rent_eur": "={{ $json.financials.annual_gross_rent_eur }}",
+            "gross_yield_percent": "={{ $json.financials.gross_yield_percent }}",
+            "ground_rent_eur": "={{ $json.financials.ground_rent_eur }}",
+            "commission_buyer_percent": "={{ $json.transaction.commission_buyer_percent }}",
+            "commission_buyer_eur": "={{ $json.transaction.commission_buyer_eur }}",
+            "energy_consumption_kwh_m2": "={{ $json.energy.energy_consumption_kwh_m2 }}",
+            "listing_id": "={{ $json.listing.id }}",
+            "url": "={{ $json.listing.url }}",
+            "title": "={{ $json.listing.title }}",
+            "property_type": "={{ $json.listing.property_type }}",
+            "street": "={{ $json.location.street }}",
+            "city": "={{ $json.location.city }}",
+            "zip_code": "={{ $json.location.zip_code }}",
+            "district": "={{ $json.location.district }}",
+            "state": "={{ $json.location.state }}",
+            "country": "={{ $json.location.country }}",
+            "condition": "={{ $json.property.condition }}",
+            "parking_type": "={{ $json.property.parking_type }}",
+            "monthly_warm_rent_eur": "={{ $json.financials.monthly_warm_rent_eur }}",
+            "available_from": "={{ $json.transaction.available_from }}",
+            "listing_date": "={{ $json.transaction.listing_date }}",
+            "energy_class": "={{ $json.energy.energy_class }}",
+            "heating_type": "={{ $json.energy.heating_type }}",
+            "energy_certificate_type": "={{ $json.energy.energy_certificate_type }}",
+            "created_at": "={{ $now }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "listing_id",
+              "displayName": "listing_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "property_type",
+              "displayName": "property_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "street",
+              "displayName": "street",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zip_code",
+              "displayName": "zip_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "district",
+              "displayName": "district",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "living_area_m2",
+              "displayName": "living_area_m2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_area_m2",
+              "displayName": "total_area_m2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "land_area_m2",
+              "displayName": "land_area_m2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "rooms",
+              "displayName": "rooms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bedrooms",
+              "displayName": "bedrooms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bathrooms",
+              "displayName": "bathrooms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "floor",
+              "displayName": "floor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_floors",
+              "displayName": "total_floors",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "year_built",
+              "displayName": "year_built",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_renovation_year",
+              "displayName": "last_renovation_year",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "condition",
+              "displayName": "condition",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "has_balcony",
+              "displayName": "has_balcony",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "has_terrace",
+              "displayName": "has_terrace",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "has_garden",
+              "displayName": "has_garden",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "has_cellar",
+              "displayName": "has_cellar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "has_elevator",
+              "displayName": "has_elevator",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "parking_spots",
+              "displayName": "parking_spots",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "parking_type",
+              "displayName": "parking_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "monument_protected",
+              "displayName": "monument_protected",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "purchase_price_eur",
+              "displayName": "purchase_price_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price_per_m2_eur",
+              "displayName": "price_per_m2_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "monthly_cold_rent_eur",
+              "displayName": "monthly_cold_rent_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "monthly_warm_rent_eur",
+              "displayName": "monthly_warm_rent_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "monthly_service_charges_eur",
+              "displayName": "monthly_service_charges_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "monthly_hoa_fee_eur",
+              "displayName": "monthly_hoa_fee_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "annual_gross_rent_eur",
+              "displayName": "annual_gross_rent_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "gross_yield_percent",
+              "displayName": "gross_yield_percent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ground_rent_eur",
+              "displayName": "ground_rent_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "is_currently_rented",
+              "displayName": "is_currently_rented",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "rent_indexed",
+              "displayName": "rent_indexed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "commission_buyer_percent",
+              "displayName": "commission_buyer_percent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "commission_buyer_eur",
+              "displayName": "commission_buyer_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "available_from",
+              "displayName": "available_from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "listing_date",
+              "displayName": "listing_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "energy_class",
+              "displayName": "energy_class",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "energy_consumption_kwh_m2",
+              "displayName": "energy_consumption_kwh_m2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "heating_type",
+              "displayName": "heating_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "energy_certificate_type",
+              "displayName": "energy_certificate_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1472,
+        -16
+      ],
+      "id": "fff2e2d7-3536-4cd6-b26a-47835891eb4d",
+      "name": "Insert offer details to DB",
+      "credentials": {
+        "postgres": {
+          "id": "Q56zRaiUHFlg1rRy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "immo_offers",
+          "mode": "list",
+          "cachedResultName": "immo_offers"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed": true,
+            "processed_at": "={{ $now }}",
+            "expose_id": "={{ $json.listing.id }}"
+          },
+          "matchingColumns": [
+            "expose_id"
+          ],
+          "schema": [
+            {
+              "id": "expose_id",
+              "displayName": "expose_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "titel",
+              "displayName": "titel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "link",
+              "displayName": "link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "addresse",
+              "displayName": "addresse",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "kaufpreis",
+              "displayName": "kaufpreis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "wohnflaeche",
+              "displayName": "wohnflaeche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "zimmer",
+              "displayName": "zimmer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "mail_id",
+              "displayName": "mail_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "mail_subject",
+              "displayName": "mail_subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "mail_date",
+              "displayName": "mail_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "processed",
+              "displayName": "processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1472,
+        240
+      ],
+      "id": "916dfafc-4d17-4248-afe0-858e77b9d9f7",
+      "name": "Update processed offer",
+      "credentials": {
+        "postgres": {
+          "id": "Q56zRaiUHFlg1rRy",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Gell all unprocessed offers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Immo Offer HTML": {
+      "main": [
+        [
+          {
+            "node": "HTML Trimmer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gell all unprocessed offers": {
+      "main": [
+        [
+          {
+            "node": "Get Immo Offer HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML Trimmer": {
+      "main": [
+        [
+          {
+            "node": "Extract Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Metadata": {
+      "main": [
+        [
+          {
+            "node": "Parse Immo Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Immo Metadata": {
+      "main": [
+        [
+          {
+            "node": "Send offer via Telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update processed offer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert offer details to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send offer via Telegram": {
+      "main": [
+        []
+      ]
+    },
+    "Update processed offer": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c7c0fd8f-bd05-4d0f-bc2b-7b2aef039561",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4537ef469a3d51b940ec62f115a19eed14d0413ffc226be16fd5ba478655a5a4"
+  },
+  "nodeGroups": [],
+  "id": "TKVfCmCdV9JAHJRB",
+  "tags": []
+}

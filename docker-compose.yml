@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Local-only stack -> secure cookie off (see note in README if you ever expose this publicly)
+      - N8N_SECURE_COOKIE=false
+      - GENERIC_TIMEZONE=Europe/Berlin
+      - TZ=Europe/Berlin
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Local workflow JSON files, mounted read-only into the container so you
+      # can bulk-import/update them with the CLI (see README "Syncing workflows")
+      - ./workflows:/workflows
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - immo_net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: immo_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      # Exposed to host too, so you can connect with a DB client (TablePlus, DBeaver, psql...) if you want
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Anything in ./init runs once, only on first container start, to bootstrap the schema
+      - ./init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - immo_net
+
+volumes:
+  n8n_data:
+  pg_data:
+
+networks:
+  immo_net:
+    driver: bridge

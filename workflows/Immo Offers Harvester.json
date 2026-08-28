@@ -1,0 +1,278 @@
+{
+  "name": "Immo Offers Harvester",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 15,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "simple": false,
+        "maxResults": 20,
+        "filters": {
+          "q": "from:(immobilienscout24.de)"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "700322ad-95ae-4296-ab3c-6406f3a00a87",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NV1cVT5tQqCW4OGW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nconst grab = (block, label) => {\n  const m = block.match(new RegExp('^\\\\s*' + label + '\\\\s*:\\\\s*(.+)$', 'mi'));\n  return m ? m[1].trim() : null;\n};\n\nconst toNum = (s) => {\n  if (!s) return null;\n  const m = s.replace(/\\./g, '').replace(',', '.').match(/-?\\d+(\\.\\d+)?/);\n  return m ? parseFloat(m[0]) : null;\n};\n\nconst DASH_FOOTER = /Alle Angebote ansehen|<!--\\s*FOOTER START/i;\n\n$input.all().forEach((item, idx) => {\n  const d = item.json;\n  const raw = d.text ?? d.textPlain ?? d.body ?? d.snippet ?? '';\n\n  let text = String(raw)\n    .replace(/\\\\r\\\\n|\\\\n/g, '\\n')\n    .replace(/\\r\\n/g, '\\n')\n    .replace(/&nbsp;/g, ' ');\n\n  const cut = text.search(DASH_FOOTER);\n  if (cut > -1) text = text.slice(0, cut);\n\n  for (const chunk of text.split(/\\n(?=\\s*Titel\\s*:)/i)) {\n    if (!/^\\s*Titel\\s*:/i.test(chunk)) continue;\n\n    const link = (chunk.match(/https?:\\/\\/\\S*expose\\/\\d+\\S*/i) || [null])[0];\n    const exposeId = link ? (link.match(/expose\\/(\\d+)/) || [])[1] : null;\n    if (!exposeId) continue;\n\n    results.push({\n      json: {\n        expose_id: exposeId,\n        titel: grab(chunk, 'Titel'),\n        link,\n        addresse: grab(chunk, 'Adresse'),\n        kaufpreis: grab(chunk, 'Kaufpreis'),\n        wohnflaeche: grab(chunk, 'Wohnfl(?:ä|ae)che'),\n        zimmer: toNum(grab(chunk, 'Zimmer')),\n        mail_id: d.id ?? null,\n        mail_subject: d.subject ?? null,\n        mail_date: d.date ?? null,\n      },\n      pairedItem: { item: idx },\n    });\n  }\n});\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "4aa04f91-d84b-4660-a18b-7bf109404a02",
+      "name": "Code in JavaScript",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "immo_offers",
+          "mode": "list",
+          "cachedResultName": "immo_offers"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "processed": false,
+            "zimmer": 0
+          },
+          "matchingColumns": [
+            "expose_id"
+          ],
+          "schema": [
+            {
+              "id": "expose_id",
+              "displayName": "expose_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "titel",
+              "displayName": "titel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "link",
+              "displayName": "link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "addresse",
+              "displayName": "addresse",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "kaufpreis",
+              "displayName": "kaufpreis",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "wohnflaeche",
+              "displayName": "wohnflaeche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "zimmer",
+              "displayName": "zimmer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "mail_id",
+              "displayName": "mail_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "mail_subject",
+              "displayName": "mail_subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "mail_date",
+              "displayName": "mail_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "processed",
+              "displayName": "processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "queryBatching": "independently"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        448,
+        0
+      ],
+      "id": "c6ead7b7-bee3-44d3-9fba-91f9666f250b",
+      "name": "Insert or update rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "Q56zRaiUHFlg1rRy",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Insert or update rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1db5ff88-35b1-4617-97fc-1d4513b985e1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4537ef469a3d51b940ec62f115a19eed14d0413ffc226be16fd5ba478655a5a4"
+  },
+  "nodeGroups": [],
+  "id": "raSZqSOJKorZmDKL",
+  "tags": []
+}
